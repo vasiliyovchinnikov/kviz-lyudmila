@@ -89,10 +89,13 @@ function showStart() {
 
       <div class="collage-card">
         <span class="sticker s1">K-pop style</span>
-        <span class="sticker s3">42 вопроса</span>
-        <span class="sticker s2">Квиз-перфи</span>
-        <div class="collage-placeholder" data-slot="collage"></div>
-        <p class="collage-caption">Здесь будет коллаж из фото Людмилы 💗</p>
+        <span class="sticker s2">проверь себя</span>
+        <div class="collage-placeholder">
+          <img class="collage-main" src="assets/photos/hero.jpg" alt="Людмила">
+          <img class="collage-thumb" src="assets/photos/pink.jpg" alt="Людмила">
+          <img class="collage-thumb" src="assets/photos/crown.jpg" alt="Людмила">
+        </div>
+        <span class="sticker s3">всё из архива @ludatsoy</span>
       </div>
 
       <div class="info-grid">
@@ -290,6 +293,20 @@ function showInterstitial() {
   };
 }
 
+const PHOTO_TAPE = [
+  ['satin',  'Стиль 🎀'],
+  ['pink',   'Розовое 🌸'],
+  ['crown',  'Корона 👑'],
+  ['bomber', 'Сукадзян 🐉'],
+  ['gym',    'Гребля 🚣‍♀️'],
+  ['yoga',   'На коврике 🧘‍♀️'],
+  ['garage', 'Гараж-перфи 😂'],
+  ['pier',   'С Васей 🩷'],
+  ['kiss',   'Походы 🌲'],
+  ['mtn',    'Горы 🏔'],
+  ['nerli',  'Нерль ⛪'],
+];
+
 /* ============================================================
    ФИНАЛ
    ============================================================ */
@@ -314,6 +331,16 @@ function showFinal() {
       <div id="saved-note" hidden></div>
 
       <div id="board-wrap"></div>
+
+      <section class="board">
+        <div class="board-title">Foto-лента именинницы 🎀 листай →</div>
+        <div class="photo-tape">
+          ${PHOTO_TAPE.map(([n, cap]) => el(`
+            <figure class="collage-frame ${Math.random() > 0.5 ? 'r' : ''}" data-cap="${esc(cap)}">
+              <img src="assets/photos/${n}.jpg" alt="${esc(cap)}" loading="lazy">
+            </figure>`).outerHTML).join('')}
+        </div>
+      </section>
 
       <div class="btn-row">
         <button class="btn btn-ghost" id="again">Заново 🔁</button>
