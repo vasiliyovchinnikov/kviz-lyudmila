@@ -699,6 +699,14 @@ body {
 .side-list .board-place { width: 24px; height: 24px; font-size: 12px; border-radius: 8px; }
 .side-list .board-name { font-size: 13px; }
 .side-list .board-score { font-size: 13px; }
+.side-list .board-del { display: none; }
+.board-del {
+  border: none; background: rgba(255,255,255,0.06); color: var(--muted);
+  font-size: 15px; line-height: 1; width: 26px; height: 26px; border-radius: 8px;
+  cursor: pointer; flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.board-del:hover { background: rgba(255,45,120,0.14); color: var(--pink-hot); }
 
 @media (min-width: 1024px) {
   .quiz-split { grid-template-columns: minmax(0, 1fr) 280px; }
