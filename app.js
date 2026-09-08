@@ -554,16 +554,16 @@ function renderBoard() {
   const wrap = document.getElementById('board-wrap');
   if (!wrap) return;
   const list = loadBoard()
-    .sort((a, b) => (b.score / b.max) - (a.score / a.max) || b.score - a.score)
-    .slice(0, 10);
+    .sort((a, b) => (b.score / b.max) - (a.score / a.max) || b.score - a.score);
 
   const rows = list.map((e, i) => {
     const me = S && S.lastName && S.lastName === e.name;
     return el(`
-      <div class="board-row ${i === 0 ? 'top1' : i < 3 ? `top${i + 1}` : ''} ${me ? 'me' : ''}">
+      <div class="board-row ${i === 0 ? 'top1' : i < 3 ? `top${i + 1}` : ''} ${me ? 'me' : ''}" data-ts="${e.ts}">
         <span class="board-place">${i + 1}</span>
         <span class="board-name">${esc(e.name)}</span>
         <span class="board-score">${e.score}</span>
+        <button class="board-del" title="Удалить эту запись" aria-label="Удалить ${esc(e.name)}">×</button>
       </div>`).outerHTML;
   }).join('');
 
@@ -573,6 +573,15 @@ function renderBoard() {
       ${rows ? `<div class="board-list">${rows}</div>` : '<div class="board-empty">Пока пусто — стань первым перфи!</div>'}
       ${list.length ? '<button class="board-clear" id="clear-board">Очистить рекорды</button>' : ''}
     </section>`));
+
+  wrap.querySelectorAll('.board-del').forEach(btn => {
+    btn.onclick = () => {
+      const ts = btn.closest('.board-row').dataset.ts;
+      const rest = loadBoard().filter(x => x.ts !== ts);
+      localStorage.setItem(BOARD_KEY, JSON.stringify(rest));
+      renderBoard();
+    };
+  });
 
   const btn = document.getElementById('clear-board');
   if (btn) btn.onclick = () => {
