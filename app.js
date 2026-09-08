@@ -84,7 +84,7 @@ function showStart() {
       <header class="brand">
         <span class="kicker">Хэппи бёздей · 24.09.2026 ·42</span>
         <h1 class="h1">Насколько ты<br>знаешь <span class="grad">Людмилу Цой?</span></h1>
-        <p class="lead">39 вопросов из настоящих архивов: Instagram @ludatsoy и Telegram @pishetsoy. Ничего не придумано — всё по постам.</p>
+        <p class="lead">39 вопросов из настоящих архивов: Instagram <a class="src-link" href="https://instagram.com/ludatsoy" target="_blank" rel="noopener">@ludatsoy</a> и Telegram <a class="src-link" href="https://t.me/pishetsoy" target="_blank" rel="noopener">@pishetsoy</a>. Ничего не придумано — всё по постам.</p>
       </header>
 
       <div class="collage-card">
