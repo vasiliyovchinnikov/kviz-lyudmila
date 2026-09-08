@@ -1,0 +1,19 @@
+# Редирект с http на https создан автоматически при заказе бесплатного ssl-сертификата
+RewriteEngine On
+RewriteCond %{SERVER_PORT} !^443$
+RewriteRule .* https://%{SERVER_NAME}%{REQUEST_URI} [R,L]
+# Конец редиректа
+
+# canonical: www -> без-www (DNS www теперь указывает на хостинг)
+RewriteCond %{HTTP_HOST} ^www\.ludatsoy\.ru$ [NC]
+RewriteRule ^(.*)$ https://ludatsoy.ru/$1 [R=301,L]
+
+# кэш статики (если mod_expires выключен, блок просто не сработает)
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType image/jpeg "access plus 30 days"
+  ExpiresByType text/css "access plus 7 days"
+  ExpiresByType application/javascript "access plus 7 days"
+  ExpiresByType text/html "access plus 0 seconds"
+  ExpiresByType application/json "access plus 0 seconds"
+</IfModule>
