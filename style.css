@@ -56,8 +56,9 @@ body {
 .collage-main {
   grid-row: span 2;
   width: 100%; height: 100%;
-  min-height: 260px;
+  min-height: 380px;
   object-fit: cover;
+  object-position: 50% 18%;
   border-radius: var(--radius-sm);
   border: 1px solid rgba(255,255,255,0.10);
 }
@@ -65,6 +66,7 @@ body {
   width: 100%; height: 100%;
   min-height: 122px;
   object-fit: cover;
+  object-position: 50% 18%;
   border-radius: var(--radius-sm);
   border: 1px solid rgba(255,255,255,0.10);
 }
@@ -646,6 +648,7 @@ body {
 .spacer { flex: 1; }
 .center { text-align: center; align-items: center; }
 .footer-note { color: var(--muted); font-size: 12px; text-align: center; font-weight: 600; padding-top: 6px; }
+.footer-note .src-link { color: var(--pink-hot); }
 .countdown {
   font-family: var(--font-display); font-weight: 800;
   color: var(--pink-soft);
@@ -666,8 +669,8 @@ body {
     grid-template-columns: 1fr;
     grid-template-rows: auto auto auto;
   }
-  .collage-main { grid-row: auto; min-height: 0; aspect-ratio: 3/3.4; }
-  .collage-thumb { min-height: 0; aspect-ratio: 3/2.1; }
+  .collage-main { grid-row: auto; min-height: 0; aspect-ratio: 3/3.6; object-position: 50% 15%; }
+  .collage-thumb { min-height: 0; aspect-ratio: 3/2.6; object-position: 50% 15%; }
   .collage-card { padding: 16px; }
 }
 @media (max-width: 380px) {
