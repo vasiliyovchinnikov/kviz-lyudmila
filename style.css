@@ -663,6 +663,42 @@ body {
 }
 .back-link:hover { color: var(--pink-hot); }
 
+/* ---------- двухколоночный режим квиза + карточка игрока ---------- */
+.screen-wide { max-width: 1080px; }
+.quiz-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+.player-card {
+  border: 1px solid var(--line-pink);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin-bottom: 8px;
+}
+.pc-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.pc-score { font-family: var(--font-display); font-weight: 800; font-size: 18px; color: var(--pink-hot); }
+.pc-pct { font-size: 12px; color: var(--muted); font-weight: 700; }
+.pc-bar {
+  height: 6px; border-radius: 99px; background: rgba(255,255,255,0.08);
+  overflow: hidden; margin: 8px 0 6px;
+}
+.pc-bar i {
+  display: block; height: 100%; border-radius: 99px;
+  background: linear-gradient(90deg, var(--pink), var(--pink-hot));
+  transition: width 0.4s ease;
+}
+.pc-sub { font-size: 11px; color: var(--muted); font-weight: 600; }
+.btn-pause { width: 100%; font-size: 13px; padding: 10px; }
+.quiz-side-board { margin: 0; position: sticky; top: 16px; }
+.side-note { font-size: 11px; color: var(--muted); margin-top: 10px; font-weight: 600; line-height: 1.4; }
+
+@media (min-width: 1024px) {
+  .quiz-split { grid-template-columns: minmax(0, 1fr) 280px; }
+}
+
 /* мелкие экраны */
 @media (max-width: 480px) {
   .collage-placeholder {
