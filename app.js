@@ -25,12 +25,13 @@ const RANKS = [
 const BOARD_KEY = 'kviz_ludmila_board_v1';
 const SAVE_KEY = 'kviz_ludmila_save_v1';
 const DEL_KEY = 'kviz_ludmila_del_v1';
-const CLOUD_ID = 'ff808181a067127101a081068eef49ba';
-const CLOUD_URL = 'https://api.restful-api.dev/objects/' + CLOUD_ID;
+const PENDING_KEY = 'kviz_ludmila_pending_v1';
+const API_URL = '/board.php'; // свой API на хостинге, same-origin
 
 let BOARD = [];
-const CLOUD_TOMBSTONES = new Set();
-let CLOUD_OK = null; // null = неизвестно, true/false после первого обмена
+const CLOUD_TOMBSTONES = new Set(); // локально скрытые (удалённые) записи
+let PENDING = []; // записи, ожидающие отправки на сервер
+let CLOUD_OK = null; // null = синхронизация, true/false после обмена
 
 let DATA = null;
 let MAX = 0;
@@ -69,15 +70,16 @@ async function load() {
     DATA = await r.json();
     MAX = LV_ORDER.reduce((s, l) => s + DATA[l].questions.length * DATA[l].points, 0);
     TOTAL_Q = LV_ORDER.reduce((s, l) => s + DATA[l].questions.length, 0);
-    // локальный кэш таблицы + облачная синхронизация
+    // локальный кэш таблицы + синхронизация с сервером
     try {
       BOARD = JSON.parse(localStorage.getItem(BOARD_KEY)) || [];
       const dl = JSON.parse(localStorage.getItem(DEL_KEY));
       (dl || []).forEach(t => CLOUD_TOMBSTONES.add(t));
+      PENDING = JSON.parse(localStorage.getItem(PENDING_KEY)) || [];
       BOARD = normalizeRecs(BOARD);
     } catch {}
-    cloudPullAndMaybePush();
-    showStart();
+    cloudPull();
+    flushPending();
   } catch (e) {
     app.replaceChildren(el(`
       <section class="screen">
@@ -323,7 +325,7 @@ function boardHTML(cls) {
   const rows = list.map((e, i) => `
     <div class="board-row ${i === 0 ? 'top1' : i < 3 ? `top${i + 1}` : ''} ${S.lastName === e.name ? 'me' : ''}">
       <span class="board-place">${i + 1}</span>
-      <span class="board-name">${esc(e.name)}</span>
+      <span class="board-name">${esc(String(e.name).slice(0, 40))}</span>
       <span class="board-score">${e.score}</span>
     </div>`).join('');
   return `
@@ -426,7 +428,7 @@ function showInterstitial() {
       ${afterL1 ? `
       <form class="name-form" id="name-form">
         <label class="info-k" for="name-input">Предпросмотр: впиши имя — попадёшь в топ после этого блока</label>
-        <input class="name-input" id="name-input" placeholder="Например: Вася" maxlength="24" autocomplete="off">
+        <input class="name-input" id="name-input" placeholder="Например: Вася" maxlength="40" autocomplete="off">
         <button class="btn btn-pink" type="submit">Сохранить результат блока 💾</button>
         <div id="saved-note" hidden></div>
       </form>` : ''}
@@ -478,7 +480,7 @@ function showFinal() {
 
       <form class="name-form" id="name-form">
         <label class="info-k" for="name-input">Твоё имя — попадёшь в таблицу рекордов</label>
-        <input class="name-input" id="name-input" placeholder="Например: Вася" maxlength="24" value="${esc(names.last || '')}" autocomplete="off">
+        <input class="name-input" id="name-input" placeholder="Например: Вася" maxlength="40" value="${esc(names.last || '')}" autocomplete="off">
         <button class="btn btn-pink" type="submit">Сохранить в таблицу рекордов 💾</button>
       </form>
       <div id="saved-note" hidden></div>
@@ -535,6 +537,7 @@ function persistBoard() {
   try {
     localStorage.setItem(BOARD_KEY, JSON.stringify(BOARD));
     localStorage.setItem(DEL_KEY, JSON.stringify([...CLOUD_TOMBSTONES]));
+    localStorage.setItem(PENDING_KEY, JSON.stringify(PENDING));
   } catch {}
 }
 function normalizeRecs(l) {
@@ -546,42 +549,51 @@ function mergeBoards(a, b) {
   return [...seen.values()].sort((x, y) =>
     (y.score / (y.max || MAX)) - (x.score / (x.max || MAX)) || y.score - x.score);
 }
-function cloudPayload() {
-  return { name: 'kviz-ludmila-board', data: { records: normalizeRecs(BOARD).slice(0, 100), del: [...CLOUD_TOMBSTONES] } };
-}
 let cloudTimer = null;
 function scheduleCloudPush(delay = 600) {
   clearTimeout(cloudTimer);
-  cloudTimer = setTimeout(cloudPush, delay);
+  cloudTimer = setTimeout(flushPending, delay);
 }
-async function cloudPullAndMaybePush() {
+/* GET таблицы с сервера → merge в локальную */
+async function cloudPull() {
   try {
-    const r = await fetch(CLOUD_URL, { cache: 'no-store' });
+    const r = await fetch(API_URL, { cache: 'no-store' });
+    if (!r.ok) throw new Error(r.status);
     const j = await r.json();
-    ((j.data && j.data.del) || []).forEach(t => CLOUD_TOMBSTONES.add(t));
-    const before = normalizeRecs(BOARD).length;
-    BOARD = mergeBoards(normalizeRecs(BOARD), (j.data && j.data.records) || []);
+    BOARD = mergeBoards(normalizeRecs(BOARD), (j.records || []).filter(x => !CLOUD_TOMBSTONES.has(x.ts)));
+    PENDING = PENDING.filter(p => !BOARD.some(x => x.ts === p.ts)); // уже на сервере
+    persistBoard();
+    CLOUD_OK = true;
+  } catch { CLOUD_OK = false; }
+  refreshBoardUIs();
+}
+/* отправка отложенных записей (новых и застрявших офлайн) */
+async function flushPending() {
+  if (!PENDING.length) { CLOUD_OK = true; refreshBoardUIs(); return; }
+  const rec = PENDING[0];
+  try {
+    const r = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(rec),
+    });
+    if (r.status === 429) { // rate-limit 10с/IP — тихо подождать и повторить
+      setTimeout(flushPending, 10000);
+      return;
+    }
+    if (!r.ok) throw new Error(r.status);
+    const j = await r.json();
+    BOARD = mergeBoards(normalizeRecs(BOARD), (j.records || []).filter(x => !CLOUD_TOMBSTONES.has(x.ts)));
+    PENDING = PENDING.filter(p => p.ts !== rec.ts);
     persistBoard();
     CLOUD_OK = true;
     refreshBoardUIs();
-    if (BOARD.length !== before) scheduleCloudPush(); // локальные записи ещё не в облаке
-  } catch { CLOUD_OK = false; refreshBoardUIs(); }
-}
-async function cloudPush() {
-  try {
-    const r = await fetch(CLOUD_URL, { cache: 'no-store' });
-    const j = await r.json();
-    ((j.data && j.data.del) || []).forEach(t => CLOUD_TOMBSTONES.add(t));
-    BOARD = mergeBoards(normalizeRecs(BOARD), (j.data && j.data.records) || []);
-    persistBoard();
-    const put = await fetch(CLOUD_URL, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(cloudPayload()),
-    });
-    CLOUD_OK = !!put.ok;
-  } catch { CLOUD_OK = false; }
-  refreshBoardUIs();
+    if (PENDING.length) flushPending(); // следующая в очереди
+  } catch {
+    CLOUD_OK = false;
+    refreshBoardUIs();
+    setTimeout(flushPending, 30000); // Wi-Fi площадки: ретрай через 30 сек
+  }
 }
 function refreshBoardUIs() {
   if (document.getElementById('board-wrap')) renderBoard();
@@ -591,13 +603,20 @@ function refreshBoardUIs() {
 function saveBoardList(list) {
   BOARD = mergeBoards(normalizeRecs(list), BOARD);
   persistBoard();
+  // найти записи, которых ещё нет на сервере, и поставить в очередь отправки
+  const server = BOARD.filter(x => !PENDING.some(p => p.ts === x.ts));
+  for (const r of server) {
+    if (!PENDING.some(p => p.ts === r.ts) && !BOARD_SENT.has(r.ts)) PENDING.push(r);
+  }
+  persistBoard();
   scheduleCloudPush();
 }
+const BOARD_SENT = new Set(); // ts записей, уже принятых сервером в этой сессии
 function deleteBoardRecord(ts) {
   CLOUD_TOMBSTONES.add(ts);
   BOARD = BOARD.filter(x => x.ts !== ts);
+  PENDING = PENDING.filter(p => p.ts !== ts);
   persistBoard();
-  scheduleCloudPush();
   renderBoard();
 }
 
@@ -622,6 +641,7 @@ function saveName() {
   localStorage.setItem('kviz_ludmila_last_name', name);
   flashSaved(`Сохранено: ${name} — ${S.score} ⭐`);
   renderBoard();
+  flushPending(); // сразу отправить на сервер, не ждать таймер
 }
 
 function savedNames() {
@@ -639,12 +659,13 @@ function renderBoard() {
 
   const rows = list.map((e, i) => {
     const me = S && S.lastName && S.lastName === e.name;
+    const name = esc(String(e.name).slice(0, 40));
     return el(`
-      <div class="board-row ${i === 0 ? 'top1' : i < 3 ? `top${i + 1}` : ''} ${me ? 'me' : ''}" data-ts="${e.ts}">
+      <div class="board-row ${i === 0 ? 'top1' : i < 3 ? `top${i + 1}` : ''} ${me ? 'me' : ''}" data-ts="${esc(e.ts)}">
         <span class="board-place">${i + 1}</span>
-        <span class="board-name">${esc(e.name)}</span>
+        <span class="board-name">${name}</span>
         <span class="board-score">${e.score}</span>
-        <button class="board-del" title="Удалить эту запись" aria-label="Удалить ${esc(e.name)}">×</button>
+        <button class="board-del" title="Удалить эту запись" aria-label="Удалить ${name}">×</button>
       </div>`).outerHTML;
   }).join('');
 
@@ -666,8 +687,8 @@ function renderBoard() {
       CLOUD_TOMBSTONES.clear();
       loadBoard().forEach(x => CLOUD_TOMBSTONES.add(x.ts));
       BOARD = [];
+      PENDING = [];
       persistBoard();
-      scheduleCloudPush();
       renderBoard();
     }
   };
