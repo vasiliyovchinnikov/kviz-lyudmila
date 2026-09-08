@@ -694,6 +694,7 @@ body {
 .btn-pause { width: 100%; font-size: 13px; padding: 10px; }
 .quiz-side-board { margin: 0; position: sticky; top: 16px; }
 .side-note { font-size: 11px; color: var(--muted); margin-top: 10px; font-weight: 600; line-height: 1.4; }
+.sync-state { display: block; font-weight: 600; text-transform: none; font-size: 10.5px; color: var(--muted); margin-top: 3px; letter-spacing: 0; }
 .side-list { max-height: 76vh; overflow-y: auto; }
 .side-list .board-row { padding: 6px 12px; gap: 8px; }
 .side-list .board-place { width: 24px; height: 24px; font-size: 12px; border-radius: 8px; }
