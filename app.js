@@ -84,7 +84,7 @@ function showStart() {
       <header class="brand">
         <span class="kicker">Хэппи бёздей · 24.09.2026 ·42</span>
         <h1 class="h1">Насколько ты<br>знаешь <span class="grad">Людмилу Цой?</span></h1>
-        <p class="lead">42 вопроса из настоящих архивов: Instagram @ludatsoy и Telegram @pishetsoy. Ничего не придумано — всё по постам.</p>
+        <p class="lead">39 вопросов из настоящих архивов: Instagram @ludatsoy и Telegram @pishetsoy. Ничего не придумано — всё по постам.</p>
       </header>
 
       <div class="collage-card">
@@ -99,7 +99,7 @@ function showStart() {
       </div>
 
       <div class="info-grid">
-        <div class="info"><span class="info-k">Вопросов</span><span class="info-v">42</span></div>
+        <div class="info"><span class="info-k">Вопросов</span><span class="info-v">${LV_ORDER.reduce((s, l) => s + DATA[l].questions.length, 0)}</span></div>
         <div class="info"><span class="info-k">Максимум</span><span class="info-v">${MAX}</span></div>
         <div class="info"><span class="info-k">Уровней</span><span class="info-v">3</span></div>
         <div class="info"><span class="info-k">Формат</span><span class="info-v">⏱ марафон</span></div>
@@ -169,13 +169,13 @@ function showQuestion() {
   const pool = q.options.map((text, idx) => ({ text, idx }));
   const opts = shuffle(pool);
   const correctPos = opts.findIndex(p => p.idx === q.correct);
-  const answerTotal = 42;
+  const TOTAL_Q = LV_ORDER.reduce((s, l) => s + DATA[l].questions.length, 0);
   const doneCount = COUNT_POS[lvl] + S.q + (S.answered ? 1 : 0);
-  const pct = Math.round((doneCount / answerTotal) * 100);
+  const pct = Math.round((doneCount / TOTAL_Q) * 100);
 
   app.replaceChildren(el(`
     <section class="screen">
-      ${topbar(`Уровень ${m.lv} · ${m.emoji}`, `⭐ ${S.score}`, `вопрос ${QUEST_ID(lvl, S.q)}/42`, pct)}
+      ${topbar(`Уровень ${m.lv} · ${m.emoji}`, `⭐ ${S.score}`, `вопрос ${QUEST_ID(lvl, S.q)}/${TOTAL_Q}`, pct)}
 
       <div class="q-card">
         <span class="q-lvline">${esc(D.title)} · +${m.pts} за верный</span>
