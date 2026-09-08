@@ -304,7 +304,7 @@ function showQuestion() {
 function boardHTML(cls) {
   const list = loadBoard()
     .sort((a, b) => (b.score / b.max) - (a.score / a.max) || b.score - a.score)
-    .slice(0, 5);
+    .slice(0, 15);
   const rows = list.map((e, i) => `
     <div class="board-row ${i === 0 ? 'top1' : i < 3 ? `top${i + 1}` : ''} ${S.lastName === e.name ? 'me' : ''}">
       <span class="board-place">${i + 1}</span>
@@ -313,8 +313,8 @@ function boardHTML(cls) {
     </div>`).join('');
   return `
     <aside class="board quiz-side-board ${cls}">
-      <div class="board-title">🏆 Топ-5</div>
-      ${rows || '<div class="board-empty">Пока пусто</div>'}
+      <div class="board-title">🏆 Топ-15</div>
+      <div class="board-list side-list">${rows || '<div class="board-empty">Пока пусто</div>'}</div>
       <div class="side-note">Сохраняйся после блока — попадёшь в таблицу</div>
     </aside>`;
 }
