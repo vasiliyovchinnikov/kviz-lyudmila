@@ -190,7 +190,7 @@ function showQuestion() {
       </div>
 
       <div class="spacer"></div>
-      <p class="footer-note">Из архивов @ludatsoy и @pishetsoy · 24.09.2026</p>
+      <p class="footer-note">Из архивов <a class="src-link" href="https://instagram.com/ludatsoy" target="_blank" rel="noopener">@ludatsoy</a> и <a class="src-link" href="https://t.me/pishetsoy" target="_blank" rel="noopener">@pishetsoy</a> · 24.09.2026</p>
     </section>`));
 
   // listens
