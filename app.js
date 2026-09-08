@@ -24,6 +24,13 @@ const RANKS = [
 
 const BOARD_KEY = 'kviz_ludmila_board_v1';
 const SAVE_KEY = 'kviz_ludmila_save_v1';
+const DEL_KEY = 'kviz_ludmila_del_v1';
+const CLOUD_ID = 'ff808181a067127101a081068eef49ba';
+const CLOUD_URL = 'https://api.restful-api.dev/objects/' + CLOUD_ID;
+
+let BOARD = [];
+const CLOUD_TOMBSTONES = new Set();
+let CLOUD_OK = null; // null = неизвестно, true/false после первого обмена
 
 let DATA = null;
 let MAX = 0;
@@ -62,6 +69,14 @@ async function load() {
     DATA = await r.json();
     MAX = LV_ORDER.reduce((s, l) => s + DATA[l].questions.length * DATA[l].points, 0);
     TOTAL_Q = LV_ORDER.reduce((s, l) => s + DATA[l].questions.length, 0);
+    // локальный кэш таблицы + облачная синхронизация
+    try {
+      BOARD = JSON.parse(localStorage.getItem(BOARD_KEY)) || [];
+      const dl = JSON.parse(localStorage.getItem(DEL_KEY));
+      (dl || []).forEach(t => CLOUD_TOMBSTONES.add(t));
+      BOARD = normalizeRecs(BOARD);
+    } catch {}
+    cloudPullAndMaybePush();
     showStart();
   } catch (e) {
     app.replaceChildren(el(`
@@ -514,12 +529,78 @@ function flashSaved(msg) {
    РЕКОРДЫ
    ============================================================ */
 function loadBoard() {
-  try { return JSON.parse(localStorage.getItem(BOARD_KEY)) || []; }
-  catch { return []; }
+  return BOARD;
+}
+function persistBoard() {
+  try {
+    localStorage.setItem(BOARD_KEY, JSON.stringify(BOARD));
+    localStorage.setItem(DEL_KEY, JSON.stringify([...CLOUD_TOMBSTONES]));
+  } catch {}
+}
+function normalizeRecs(l) {
+  return (l || []).filter(x => x && x.name && typeof x.score === 'number' && x.ts && !CLOUD_TOMBSTONES.has(x.ts));
+}
+function mergeBoards(a, b) {
+  const seen = new Map();
+  for (const r of [...(a || []), ...(b || [])]) if (r.ts && !seen.has(r.ts)) seen.set(r.ts, r);
+  return [...seen.values()].sort((x, y) =>
+    (y.score / (y.max || MAX)) - (x.score / (x.max || MAX)) || y.score - x.score);
+}
+function cloudPayload() {
+  return { name: 'kviz-ludmila-board', data: { records: normalizeRecs(BOARD).slice(0, 100), del: [...CLOUD_TOMBSTONES] } };
+}
+let cloudTimer = null;
+function scheduleCloudPush(delay = 600) {
+  clearTimeout(cloudTimer);
+  cloudTimer = setTimeout(cloudPush, delay);
+}
+async function cloudPullAndMaybePush() {
+  try {
+    const r = await fetch(CLOUD_URL, { cache: 'no-store' });
+    const j = await r.json();
+    ((j.data && j.data.del) || []).forEach(t => CLOUD_TOMBSTONES.add(t));
+    const before = normalizeRecs(BOARD).length;
+    BOARD = mergeBoards(normalizeRecs(BOARD), (j.data && j.data.records) || []);
+    persistBoard();
+    CLOUD_OK = true;
+    refreshBoardUIs();
+    if (BOARD.length !== before) scheduleCloudPush(); // локальные записи ещё не в облаке
+  } catch { CLOUD_OK = false; refreshBoardUIs(); }
+}
+async function cloudPush() {
+  try {
+    const r = await fetch(CLOUD_URL, { cache: 'no-store' });
+    const j = await r.json();
+    ((j.data && j.data.del) || []).forEach(t => CLOUD_TOMBSTONES.add(t));
+    BOARD = mergeBoards(normalizeRecs(BOARD), (j.data && j.data.records) || []);
+    persistBoard();
+    const put = await fetch(CLOUD_URL, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(cloudPayload()),
+    });
+    CLOUD_OK = !!put.ok;
+  } catch { CLOUD_OK = false; }
+  refreshBoardUIs();
+}
+function refreshBoardUIs() {
+  if (document.getElementById('board-wrap')) renderBoard();
+  const side = document.querySelector('.quiz-side-board');
+  if (side) side.outerHTML = boardHTML('quiz-side');
 }
 function saveBoardList(list) {
-  localStorage.setItem(BOARD_KEY, JSON.stringify(list.slice(0, 30)));
+  BOARD = mergeBoards(normalizeRecs(list), BOARD);
+  persistBoard();
+  scheduleCloudPush();
 }
+function deleteBoardRecord(ts) {
+  CLOUD_TOMBSTONES.add(ts);
+  BOARD = BOARD.filter(x => x.ts !== ts);
+  persistBoard();
+  scheduleCloudPush();
+  renderBoard();
+}
+
 function saveName() {
   const input = document.getElementById('name-input');
   const name = (input?.value || '').trim();
@@ -567,26 +648,26 @@ function renderBoard() {
       </div>`).outerHTML;
   }).join('');
 
+  const syncTxt = CLOUD_OK === null ? ' ⋆ синхронизация…' : CLOUD_OK ? ' · общий для всех браузеров' : ' · офлайн, только этот браузер';
   wrap.replaceChildren(el(`
     <section class="board">
-      <div class="board-title">🏆 Рекорды · макс ${MAX}</div>
+      <div class="board-title">🏆 Рекорды · макс ${MAX}<span class="sync-state">${syncTxt}</span></div>
       ${rows ? `<div class="board-list">${rows}</div>` : '<div class="board-empty">Пока пусто — стань первым перфи!</div>'}
       ${list.length ? '<button class="board-clear" id="clear-board">Очистить рекорды</button>' : ''}
     </section>`));
 
   wrap.querySelectorAll('.board-del').forEach(btn => {
-    btn.onclick = () => {
-      const ts = btn.closest('.board-row').dataset.ts;
-      const rest = loadBoard().filter(x => x.ts !== ts);
-      localStorage.setItem(BOARD_KEY, JSON.stringify(rest));
-      renderBoard();
-    };
+    btn.onclick = () => deleteBoardRecord(btn.closest('.board-row').dataset.ts);
   });
 
   const btn = document.getElementById('clear-board');
   if (btn) btn.onclick = () => {
-    if (confirm('Точно очистить таблицу рекордов?')) {
-      localStorage.removeItem(BOARD_KEY);
+    if (confirm('Точно очистить таблицу рекордов? Удаление уйдёт и другим игрокам.')) {
+      CLOUD_TOMBSTONES.clear();
+      loadBoard().forEach(x => CLOUD_TOMBSTONES.add(x.ts));
+      BOARD = [];
+      persistBoard();
+      scheduleCloudPush();
       renderBoard();
     }
   };
