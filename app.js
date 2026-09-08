@@ -23,9 +23,11 @@ const RANKS = [
 ];
 
 const BOARD_KEY = 'kviz_ludmila_board_v1';
+const SAVE_KEY = 'kviz_ludmila_save_v1';
 
 let DATA = null;
 let MAX = 0;
+let TOTAL_Q = 0;
 let S = null; // состояние прохождения
 
 /* ---------- утилиты ---------- */
@@ -59,6 +61,7 @@ async function load() {
     if (!r.ok) throw new Error(r.status);
     DATA = await r.json();
     MAX = LV_ORDER.reduce((s, l) => s + DATA[l].questions.length * DATA[l].points, 0);
+    TOTAL_Q = LV_ORDER.reduce((s, l) => s + DATA[l].questions.length, 0);
     showStart();
   } catch (e) {
     app.replaceChildren(el(`
@@ -77,7 +80,7 @@ async function load() {
 /* ============================================================
    СТАРТ
    ============================================================ */
-function showStart() {
+function showStart(opts = {}) {
   const cat = rankFor(0);
   app.replaceChildren(el(`
     <section class="screen">
@@ -108,12 +111,56 @@ function showStart() {
       <div class="levels-preview">${levelRows()}</div>
 
       <button class="btn btn-pink" id="start">Играть 🚀</button>
+      <button class="btn btn-ghost" id="resume" hidden>Продолжить с сохранения ▶</button>
+      <button class="btn btn-ghost" id="new-run" hidden>Начать заново 🔁</button>
       <button class="btn btn-ghost" id="board-link">Таблица рекордов 🏆</button>
-      <p class="footer-note">Рекорды хранятся в этом браузере — играйте по кругу с одного экрана.</p>
+      <p class="footer-note" id="start-note"></p>
     </section>`));
 
   document.getElementById('start').onclick = startGame;
   document.getElementById('board-link').onclick = () => showBoard({ fromStart: true });
+  // режим паузы: есть недоигранная игра → «Продолжить» главный, «Играть» уходит в «Начать заново»
+  const prog = loadProgress();
+  const resume = document.getElementById('resume');
+  const newRun = document.getElementById('new-run');
+  if (prog) {
+    const done = COUNT_POS[LV_ORDER[prog.level]] + prog.q;
+    const pct = Math.round((done / TOTAL_Q) * 100);
+    const startBtn = document.getElementById('start');
+    const note = document.getElementById('start-note');
+    if (opts.paused) {
+      startBtn.hidden = true;
+      resume.hidden = false; newRun.hidden = false;
+      resume.classList.remove('btn-ghost'); resume.classList.add('btn-pink');
+      newRun.onclick = () => { clearProgress(); startGame(); };
+      resume.onclick = () => {
+        S = {
+          level: prog.level, q: prog.q, score: prog.score,
+          perLevel: prog.perLevel || {},
+          answered: false,
+          justSaved: prog.saved || false,
+        };
+        showQuestion();
+      };
+      note.textContent = `Пауза: пройдено ${done} из ${TOTAL_Q}, ${prog.score} ⭐ · можно закрыть и вернуться в любой момент`;
+    } else {
+      note.textContent = `Твой прошлый заход: ${done} из ${TOTAL_Q}, ${prog.score} ⭐ — можно продолжить или начать заново`;
+      resume.classList.remove('btn-ghost'); resume.classList.add('btn-pink');
+      startBtn.classList.remove('btn-pink'); startBtn.classList.add('btn-ghost');
+      resume.hidden = false; newRun.hidden = true;
+      newRun.hidden = false;
+      newRun.onclick = () => { clearProgress(); startGame(); };
+      resume.onclick = () => {
+        S = {
+          level: prog.level, q: prog.q, score: prog.score,
+          perLevel: prog.perLevel || {},
+          answered: false,
+          justSaved: prog.saved || false,
+        };
+        showQuestion();
+      };
+    }
+  }
 }
 
 function levelRows() {
@@ -142,7 +189,48 @@ function startGame() {
     answered: false,
     justSaved: false,
   };
+  saveProgress();
   showQuestion();
+}
+
+/* ---------- автосейв / восстановление ---------- */
+function saveProgress() {
+  if (!S) return;
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      level: S.level, q: S.q, score: S.score,
+      perLevel: S.perLevel,
+      saved: !!S.justSaved,
+    }));
+  } catch {}
+}
+function loadProgress() {
+  try {
+    const d = JSON.parse(localStorage.getItem(SAVE_KEY));
+    if (!d || typeof d.level !== 'number') return null;
+    if (!DATA || !DATA[LV_ORDER[d.level]]) return null;
+    const D = DATA[LV_ORDER[d.level]];
+    if (d.q < 0 || d.q >= D.questions.length) return null;
+    return d;
+  } catch { return null; }
+}
+function clearProgress() {
+  try { localStorage.removeItem(SAVE_KEY); } catch {}
+}
+
+/* карточка игрока (компактная статистика в шапке вопроса) */
+function playerCard() {
+  const pct = Math.round((S.score / MAX) * 100);
+  const done = COUNT_POS[LV_ORDER[S.level]] + S.q + (S.answered ? 1 : 0);
+  return `
+    <div class="player-card">
+      <div class="pc-row">
+        <span class="pc-score">⭐ ${S.score}</span>
+        <span class="pc-pct">${pct}% от ${MAX}</span>
+      </div>
+      <div class="pc-bar"><i style="width:${pct}%"></i></div>
+      <div class="pc-sub">пройдено ${done} из ${TOTAL_Q}</div>
+    </div>`;
 }
 
 function topbar(elCls, liveTxt, scoreTxt, pctTxt) {
@@ -169,14 +257,17 @@ function showQuestion() {
   const pool = q.options.map((text, idx) => ({ text, idx }));
   const opts = shuffle(pool);
   const correctPos = opts.findIndex(p => p.idx === q.correct);
-  const TOTAL_Q = LV_ORDER.reduce((s, l) => s + DATA[l].questions.length, 0);
+  const TOTAL = TOTAL_Q;
   const doneCount = COUNT_POS[lvl] + S.q + (S.answered ? 1 : 0);
   const pct = Math.round((doneCount / TOTAL_Q) * 100);
 
-  app.replaceChildren(el(`
-    <section class="screen">
-      ${topbar(`Уровень ${m.lv} · ${m.emoji}`, `⭐ ${S.score}`, `вопрос ${QUEST_ID(lvl, S.q)}/${TOTAL_Q}`, pct)}
+  const boardCol = S.level > 0 || S.q >= 15 ? boardHTML('quiz-side') : '';
 
+  app.replaceChildren(el(`
+    <section class="screen screen-wide">
+      ${topbar(`Уровень ${m.lv} · ${m.emoji}`, `⭐ ${S.score}`, `вопрос ${QUEST_ID(lvl, S.q)}/${TOTAL_Q}`, pct)}
+      <div class="quiz-split">
+        <div class="quiz-main">
       <div class="q-card">
         <span class="q-lvline">${esc(D.title)} · +${m.pts} за верный</span>
         <h2 class="q-text"><span class="q-num">${QUEST_ID(lvl, S.q)}.</span> ${esc(q.q)}</h2>
@@ -189,14 +280,43 @@ function showQuestion() {
         </div>
       </div>
 
+      ${playerCard()}
+      <button class="btn btn-ghost btn-pause" id="pause">⏸ Пауза — сохранить и выйти</button>
+
       <div class="spacer"></div>
       <p class="footer-note">Из архивов <a class="src-link" href="https://instagram.com/ludatsoy" target="_blank" rel="noopener">@ludatsoy</a> и <a class="src-link" href="https://t.me/pishetsoy" target="_blank" rel="noopener">@pishetsoy</a> · 24.09.2026</p>
+        </div>
+        ${boardCol}
+      </div>
     </section>`));
 
   // listens
   document.querySelectorAll('.opt').forEach(btn => {
     btn.onclick = () => answer(btn, correctPos, q, m.pts);
   });
+  document.getElementById('pause').onclick = () => {
+    saveProgress();
+    showStart({ paused: true });
+  };
+}
+
+/* компактный лидерборд для сайдбара */
+function boardHTML(cls) {
+  const list = loadBoard()
+    .sort((a, b) => (b.score / b.max) - (a.score / a.max) || b.score - a.score)
+    .slice(0, 5);
+  const rows = list.map((e, i) => `
+    <div class="board-row ${i === 0 ? 'top1' : i < 3 ? `top${i + 1}` : ''} ${S.lastName === e.name ? 'me' : ''}">
+      <span class="board-place">${i + 1}</span>
+      <span class="board-name">${esc(e.name)}</span>
+      <span class="board-score">${e.score}</span>
+    </div>`).join('');
+  return `
+    <aside class="board quiz-side-board ${cls}">
+      <div class="board-title">🏆 Топ-5</div>
+      ${rows || '<div class="board-empty">Пока пусто</div>'}
+      <div class="side-note">Сохраняйся после блока — попадёшь в таблицу</div>
+    </aside>`;
 }
 
 const COUNT_POS = { L1: 0, L2: 15, L3: 29 };
@@ -223,6 +343,7 @@ function answer(btn, correctPos, q, pts) {
   });
 
   document.getElementById('score-chip').textContent = `⭐ ${S.score}`;
+  saveProgress();
 
   const fb = el(`
     <div class="feedback ${good ? 'good' : 'bad'}">
@@ -269,7 +390,13 @@ function showInterstitial() {
   const st = S.perLevel[doneLv];
   const m = LV_META[doneLv];
   const pct = Math.round((S.score / MAX) * 100);
+  const afterL1 = S.level === 0;
+  const checkpoint = afterL1;
+  if (checkpoint) S.justSaved = false; // форсировать новое сохранение на этом чекпоинте
+  saveProgress();
 
+  const nextLv = LV_META[LV_ORDER[S.level + 1]];
+  const nextD = DATA[LV_ORDER[S.level + 1]];
   app.replaceChildren(el(`
     <section class="screen">
       <div class="score-hero">
@@ -281,14 +408,25 @@ function showInterstitial() {
         <div class="rank"><span class="rank-k">Прогресс марафона</span><span class="bar"><i style="width:${pct}%"></i></span></div>
       </div>
 
+      ${afterL1 ? `
+      <form class="name-form" id="name-form">
+        <label class="info-k" for="name-input">Предпросмотр: впиши имя — попадёшь в топ после этого блока</label>
+        <input class="name-input" id="name-input" placeholder="Например: Вася" maxlength="24" autocomplete="off">
+        <button class="btn btn-pink" type="submit">Сохранить результат блока 💾</button>
+        <div id="saved-note" hidden></div>
+      </form>` : ''}
+
       <button class="btn btn-pink" id="go-next">
-        Играть дальше → Уровень ${LV_META[LV_ORDER[S.level + 1]].lv} ${LV_META[LV_ORDER[S.level + 1]].emoji}
+        Играть дальше → Уровень ${nextLv.lv} ${nextLv.emoji}
       </button>
-      <p class="footer-note">Уровень ${LV_META[LV_ORDER[S.level + 1]].lv} — «${esc(DATA[LV_ORDER[S.level + 1]].title)}» · +${LV_META[LV_ORDER[S.level + 1]].pts} ⭐ за верный</p>
+      <p class="footer-note">Уровень ${nextLv.lv} — «${esc(nextD.title)}» · +${nextLv.pts} ⭐ за верный · прогресс сохраняется автоматически</p>
     </section>`));
 
+  const f = document.getElementById('name-form');
+  if (f) f.onsubmit = e => { e.preventDefault(); saveName(); };
   document.getElementById('go-next').onclick = () => {
     S.level += 1; S.q = 0;
+    saveProgress();
     showQuestion();
   };
 }
