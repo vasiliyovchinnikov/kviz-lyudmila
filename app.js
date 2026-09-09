@@ -80,6 +80,7 @@ async function load() {
     } catch {}
     cloudPull();
     flushPending();
+    showStart();
   } catch (e) {
     app.replaceChildren(el(`
       <section class="screen">
