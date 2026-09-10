@@ -337,7 +337,7 @@ function boardHTML(cls) {
     </aside>`;
 }
 
-const COUNT_POS = { L1: 0, L2: 15, L3: 29 };
+const COUNT_POS = { L1: 0, L2: 16, L3: 31 };
 function QUESTIONS_BEFORE(lvl) { return DATA[lvl].questions.length; }
 function QUEST_ID(lvl, qIdx) { return COUNT_POS[lvl] + qIdx + 1; }
 
