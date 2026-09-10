@@ -613,12 +613,24 @@ function saveBoardList(list) {
   scheduleCloudPush();
 }
 const BOARD_SENT = new Set(); // ts записей, уже принятых сервером в этой сессии
-function deleteBoardRecord(ts) {
-  CLOUD_TOMBSTONES.add(ts);
-  BOARD = BOARD.filter(x => x.ts !== ts);
-  PENDING = PENDING.filter(p => p.ts !== ts);
-  persistBoard();
-  renderBoard();
+async function deleteBoardRecord(ts) {
+  const tok = prompt('Пароль модератора:');
+  if (!tok) return;
+  try {
+    const r = await fetch(API_URL + '?ts=' + encodeURIComponent(ts), {
+      method: 'DELETE',
+      headers: { 'X-Board-Token': tok },
+    });
+    if (r.status === 403) { alert('Неверный пароль модератора'); return; }
+    if (!r.ok) throw new Error(r.status);
+    CLOUD_TOMBSTONES.add(ts);
+    BOARD = BOARD.filter(x => x.ts !== ts);
+    PENDING = PENDING.filter(p => p.ts !== ts);
+    persistBoard();
+    refreshBoardUIs();
+  } catch {
+    alert('Сервер недоступен — запись не удалена. Попробуй позже.');
+  }
 }
 
 function saveName() {
@@ -688,14 +700,22 @@ function renderBoard() {
 
   const btn = document.getElementById('clear-board');
   if (btn) btn.onclick = () => {
-    if (confirm('Точно очистить таблицу рекордов? Удаление уйдёт и другим игрокам.')) {
-      CLOUD_TOMBSTONES.clear();
-      loadBoard().forEach(x => CLOUD_TOMBSTONES.add(x.ts));
-      BOARD = [];
-      PENDING = [];
-      persistBoard();
-      renderBoard();
-    }
+    if (!confirm('Удалить ВСЕ записи с сервера? Восстановить нельзя. Нужен пароль модератора.')) return;
+    const tok = prompt('Пароль модератора:');
+    if (!tok) return;
+    btn.disabled = true;
+    fetch(API_URL + '?ts=all', { method: 'DELETE', headers: { 'X-Board-Token': tok } })
+      .then(r => {
+        if (r.status === 403) { alert('Неверный пароль модератора'); return; }
+        if (!r.ok) throw new Error(r.status);
+        loadBoard().forEach(x => CLOUD_TOMBSTONES.add(x.ts));
+        BOARD = [];
+        PENDING = [];
+        persistBoard();
+        refreshBoardUIs();
+      })
+      .catch(() => alert('Сервер недоступен — очистить не удалось.'))
+      .finally(() => { btn.disabled = false; });
   };
 }
 
