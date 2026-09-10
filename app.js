@@ -652,6 +652,10 @@ function savedNames() {
 }
 
 /* рендер таблицы (используется и в финале, и отдельно со старта) */
+function syncStateTxt() {
+  return CLOUD_OK === null ? ' ⋆ синхронизация…' : CLOUD_OK ? ' · общий для всех браузеров' : ' · офлайн, только этот браузер';
+}
+
 function renderBoard() {
   const wrap = document.getElementById('board-wrap');
   if (!wrap) return;
@@ -670,7 +674,7 @@ function renderBoard() {
       </div>`).outerHTML;
   }).join('');
 
-  const syncTxt = CLOUD_OK === null ? ' ⋆ синхронизация…' : CLOUD_OK ? ' · общий для всех браузеров' : ' · офлайн, только этот браузер';
+  const syncTxt = syncStateTxt();
   wrap.replaceChildren(el(`
     <section class="board">
       <div class="board-title">🏆 Рекорды · макс ${MAX}<span class="sync-state">${syncTxt}</span></div>
@@ -702,7 +706,7 @@ function showBoard({ fromStart = false }) {
       <header class="brand">
         <button class="back-link" id="back">← Назад</button>
         <h1 class="h1">Таблица <span class="grad">рекордов</span></h1>
-        <p class="lead">Максимум — ${MAX} баллов. Рекорды хранятся в этом браузере.</p>
+        <p class="lead">Максимум — ${MAX} баллов.${syncStateTxt()}</p>
       </header>
       <div id="board-wrap"></div>
       ${fromStart ? '<button class="btn btn-pink" id="start2">Играть 🚀</button>' : ''}
