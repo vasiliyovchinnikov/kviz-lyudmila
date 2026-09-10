@@ -132,7 +132,7 @@ function safeStrEq($known, $given) {
     return $diff === 0;
 }
 
-// Модерация: DELETE board.php?ts=<ts> + заголовок X-Board-Token
+// Модерация: DELETE board.php?ts=<ts> | ts=all + заголовок X-Board-Token
 if ($method === 'DELETE') {
     $given = isset($_SERVER['HTTP_X_BOARD_TOKEN']) ? (string)$_SERVER['HTTP_X_BOARD_TOKEN'] : '';
     if ($given === '' || !is_readable(SECRET_FILE)) fail(403, 'forbidden');
@@ -140,6 +140,11 @@ if ($method === 'DELETE') {
     if ($known === '' || !safeStrEq($known, $given)) fail(403, 'forbidden');
     $ts = isset($_GET['ts']) ? (string)$_GET['ts'] : '';
     if ($ts === '' || strlen($ts) > 64) fail(422, 'ts required');
+    if ($ts === 'all') {
+        saveBoard(array());
+        echo json_encode(array('ok' => true, 'deleted' => -1));
+        exit;
+    }
     $records = loadBoard();
     $kept = array();
     $deleted = 0;
